@@ -343,22 +343,38 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     return START
 
+async def healthcheck(request):
+    """Handle healthcheck requests."""
+    return web.Response(text="OK", status=200)
+
 async def webhook_handler(request):
     """Handle incoming webhook requests."""
     if request.method == "POST":
-        data = await request.json()
-        update = Update.de_json(data, bot)
-        await application.process_update(update)
-        return web.Response()
+        try:
+            data = await request.json()
+            update = Update.de_json(data, bot)
+            await application.process_update(update)
+            return web.Response(status=200)
+        except Exception as e:
+            logger.error(f"Error processing webhook: {e}")
+            return web.Response(status=500)
     return web.Response(status=200)
 
 async def on_startup(app):
     """Set up webhook on startup."""
-    await bot.set_webhook(url=WEBHOOK_URL)
+    try:
+        await bot.set_webhook(url=WEBHOOK_URL)
+        logger.info("Webhook set successfully")
+    except Exception as e:
+        logger.error(f"Error setting webhook: {e}")
 
 async def on_shutdown(app):
     """Remove webhook on shutdown."""
-    await bot.delete_webhook()
+    try:
+        await bot.delete_webhook()
+        logger.info("Webhook removed successfully")
+    except Exception as e:
+        logger.error(f"Error removing webhook: {e}")
 
 def main() -> None:
     """Start the bot."""
@@ -406,6 +422,9 @@ def main() -> None:
 
     # Create web application
     app = web.Application()
+    
+    # Add routes
+    app.router.add_get("/", healthcheck)
     app.router.add_post("/", webhook_handler)
     
     # Add startup and shutdown handlers
@@ -413,7 +432,7 @@ def main() -> None:
     app.on_shutdown.append(on_shutdown)
     
     # Start the web server
-    web.run_app(app, port=PORT)
+    web.run_app(app, host='0.0.0.0', port=PORT)
 
 if __name__ == '__main__':
     main() 
