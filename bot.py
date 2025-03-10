@@ -4,6 +4,7 @@ import logging
 import asyncio
 import threading
 import requests
+import time
 from datetime import datetime
 from typing import Dict, List, Optional, Set
 from flask import Flask, request, Response, jsonify
@@ -362,26 +363,39 @@ def setup_handlers():
     )
 
     application.add_handler(conv_handler)
-    application.add_handler(CommandHandler("help", lambda update, context: asyncio.run(handle_callback(update, context))))
+    application.add_handler(CommandHandler("help", lambda update, context: update.message.reply_text("Используйте /start для начала")))
     logger.info("Handlers set up successfully")
-
-async def setup_webhook():
-    """Set up the webhook."""
-    webhook_url = f"{WEBHOOK_URL}/telegram"
+    
+    # Set up webhook after handlers are configured
     try:
-        # Delete existing webhook
-        await application.bot.delete_webhook()
-        logger.info("Existing webhook deleted")
+        # First delete existing webhook and drop pending updates
+        delete_result = delete_webhook()
+        logger.info(f"Delete webhook result: {delete_result}")
         
-        # Set new webhook
-        await application.bot.set_webhook(url=webhook_url)
-        logger.info(f"Webhook set up at {webhook_url}")
+        # Wait a moment to ensure webhook is deleted
+        time.sleep(1)
         
-        # Test the bot connection
-        bot_info = await application.bot.get_me()
-        logger.info(f"Bot connected: {bot_info.first_name} (@{bot_info.username})")
+        # Then set up new webhook
+        webhook_result = manual_set_webhook()
+        logger.info(f"Manual webhook setup result: {webhook_result}")
+        
+        # Check webhook status
+        webhook_info = get_webhook_info()
+        logger.info(f"Current webhook info: {webhook_info}")
     except Exception as e:
         logger.error(f"Error setting up webhook: {e}")
+
+def delete_webhook():
+    """Delete webhook using requests."""
+    delete_webhook_url = f"{TELEGRAM_API}/deleteWebhook?drop_pending_updates=true"
+    
+    try:
+        response = requests.get(delete_webhook_url)
+        logger.info(f"Delete webhook response: {response.text}")
+        return response.json()
+    except Exception as e:
+        logger.error(f"Error deleting webhook: {e}")
+        return {"ok": False, "error": str(e)}
 
 def manual_set_webhook():
     """Manually set webhook using requests."""
@@ -406,18 +420,6 @@ def get_webhook_info():
         return response.json()
     except Exception as e:
         logger.error(f"Error getting webhook info: {e}")
-        return {"ok": False, "error": str(e)}
-
-def delete_webhook():
-    """Delete webhook using requests."""
-    delete_webhook_url = f"{TELEGRAM_API}/deleteWebhook?drop_pending_updates=true"
-    
-    try:
-        response = requests.get(delete_webhook_url)
-        logger.info(f"Delete webhook response: {response.text}")
-        return response.json()
-    except Exception as e:
-        logger.error(f"Error deleting webhook: {e}")
         return {"ok": False, "error": str(e)}
 
 @app.route('/', methods=['GET'])
@@ -468,7 +470,16 @@ def telegram_webhook():
             logger.info(f"Webhook request received: {json_data}")
             
             update = Update.de_json(json_data, application.bot)
-            asyncio.run(application.process_update(update))
+            
+            # Process update synchronously to avoid threading issues
+            try:
+                if update.message and update.message.text == '/start':
+                    asyncio.run(start(update, ContextTypes.DEFAULT_TYPE()))
+                else:
+                    asyncio.run(application.process_update(update))
+            except Exception as e:
+                logger.error(f"Error processing update: {e}")
+            
             return Response(status=200)
         except Exception as e:
             logger.error(f"Error processing webhook request: {e}")
@@ -478,13 +489,6 @@ def telegram_webhook():
 if __name__ == '__main__':
     # Set up handlers
     setup_handlers()
-    
-    # Delete webhook and drop pending updates
-    delete_result = delete_webhook()
-    logger.info(f"Delete webhook result: {delete_result}")
-    
-    # Set up webhook
-    asyncio.run(setup_webhook())
     
     # Run Flask application
     app.run(host='0.0.0.0', port=PORT) 
