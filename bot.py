@@ -421,7 +421,7 @@ def setup_app():
     application.add_handler(CommandHandler("help", show_help))
 
     # Create web application
-    app = web.Application()
+    app = web.Application(client_max_size=1024*1024*10)  # 10MB max size
     
     # Add routes
     app.router.add_get("/", healthcheck)
