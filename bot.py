@@ -3,9 +3,10 @@ import json
 import logging
 import asyncio
 import threading
+import requests
 from datetime import datetime
 from typing import Dict, List, Optional, Set
-from flask import Flask, request, Response
+from flask import Flask, request, Response, jsonify
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -29,6 +30,7 @@ logger = logging.getLogger(__name__)
 TOKEN = "8039344227:AAEDCP_902a3r52JIdM9REqUyPx-p2IVtxA"
 PORT = int(os.environ.get("PORT", 8080))
 WEBHOOK_URL = os.environ.get("WEBHOOK_URL", "https://dox-bot-production.up.railway.app")
+TELEGRAM_API = f"https://api.telegram.org/bot{TOKEN}"
 WELCOME_TEXT = """
 👋 Добро пожаловать в анонимный чат!
 
@@ -354,7 +356,11 @@ async def setup_webhook():
     """Set up the webhook."""
     webhook_url = f"{WEBHOOK_URL}/telegram"
     try:
+        # Delete existing webhook
         await application.bot.delete_webhook()
+        logger.info("Existing webhook deleted")
+        
+        # Set new webhook
         await application.bot.set_webhook(url=webhook_url)
         logger.info(f"Webhook set up at {webhook_url}")
         
@@ -364,11 +370,58 @@ async def setup_webhook():
     except Exception as e:
         logger.error(f"Error setting up webhook: {e}")
 
+def manual_set_webhook():
+    """Manually set webhook using requests."""
+    webhook_url = f"{WEBHOOK_URL}/telegram"
+    set_webhook_url = f"{TELEGRAM_API}/setWebhook?url={webhook_url}"
+    
+    try:
+        response = requests.get(set_webhook_url)
+        logger.info(f"Manual webhook setup response: {response.text}")
+        return response.json()
+    except Exception as e:
+        logger.error(f"Error in manual webhook setup: {e}")
+        return {"ok": False, "error": str(e)}
+
+def get_webhook_info():
+    """Get webhook info using requests."""
+    get_webhook_url = f"{TELEGRAM_API}/getWebhookInfo"
+    
+    try:
+        response = requests.get(get_webhook_url)
+        logger.info(f"Webhook info response: {response.text}")
+        return response.json()
+    except Exception as e:
+        logger.error(f"Error getting webhook info: {e}")
+        return {"ok": False, "error": str(e)}
+
 @app.route('/', methods=['GET'])
 def index():
     """Handle healthcheck requests."""
     logger.info("Healthcheck request received")
     return "Bot is running!"
+
+@app.route('/status', methods=['GET'])
+def status():
+    """Return bot status."""
+    logger.info("Status request received")
+    
+    webhook_info = get_webhook_info()
+    stats = {
+        "active_chats": len(active_chats) // 2,
+        "searching_users": len(searching_users),
+        "total_users": len(user_data),
+        "webhook_info": webhook_info
+    }
+    
+    return jsonify(stats)
+
+@app.route('/setup-webhook', methods=['GET'])
+def setup_webhook_route():
+    """Setup webhook manually."""
+    logger.info("Manual webhook setup request received")
+    result = manual_set_webhook()
+    return jsonify(result)
 
 @app.route('/telegram', methods=['POST'])
 def telegram_webhook():

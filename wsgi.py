@@ -3,7 +3,7 @@ import sys
 import asyncio
 import logging
 import traceback
-from bot import app, setup_handlers, setup_webhook
+from bot import app, setup_handlers, setup_webhook, manual_set_webhook, get_webhook_info
 
 # Configure logging
 logging.basicConfig(
@@ -23,9 +23,17 @@ try:
     logger.info("Setting up handlers...")
     setup_handlers()
     
-    # Set up webhook
-    logger.info("Setting up webhook...")
+    # Try both webhook setup methods
+    logger.info("Setting up webhook using async method...")
     asyncio.run(setup_webhook())
+    
+    logger.info("Setting up webhook using manual method...")
+    webhook_result = manual_set_webhook()
+    logger.info(f"Manual webhook setup result: {webhook_result}")
+    
+    # Check webhook status
+    webhook_info = get_webhook_info()
+    logger.info(f"Current webhook info: {webhook_info}")
     
     logger.info("Bot setup completed successfully")
 except Exception as e:
