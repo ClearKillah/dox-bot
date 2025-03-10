@@ -376,8 +376,8 @@ async def on_shutdown(app):
     except Exception as e:
         logger.error(f"Error removing webhook: {e}")
 
-def main() -> None:
-    """Start the bot."""
+def setup_app():
+    """Set up the application."""
     global bot, application
     
     # Create the Application and pass it your bot's token
@@ -431,8 +431,11 @@ def main() -> None:
     app.on_startup.append(on_startup)
     app.on_shutdown.append(on_shutdown)
     
-    # Start the web server
-    web.run_app(app, host='0.0.0.0', port=PORT)
+    return app
+
+# Create the application instance
+app = setup_app()
 
 if __name__ == '__main__':
-    main() 
+    # This is for local development
+    web.run_app(app, host='0.0.0.0', port=PORT) 
