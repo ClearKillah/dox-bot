@@ -15,6 +15,7 @@ from telegram.ext import (
     filters,
     ContextTypes,
 )
+from aiohttp import web
 
 # Import modules
 from database import db
@@ -39,6 +40,8 @@ logger = logging.getLogger(__name__)
 
 # Constants
 TOKEN = "8039344227:AAEDCP_902a3r52JIdM9REqUyPx-p2IVtxA"
+PORT = int(os.environ.get("PORT", 8080))
+WEBHOOK_URL = "https://dox-bot-production.up.railway.app"
 WELCOME_TEXT = """
 👋 Добро пожаловать в анонимный чат!
 
@@ -340,10 +343,30 @@ async def handle_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     
     return START
 
+async def webhook_handler(request):
+    """Handle incoming webhook requests."""
+    if request.method == "POST":
+        data = await request.json()
+        update = Update.de_json(data, bot)
+        await application.process_update(update)
+        return web.Response()
+    return web.Response(status=200)
+
+async def on_startup(app):
+    """Set up webhook on startup."""
+    await bot.set_webhook(url=WEBHOOK_URL)
+
+async def on_shutdown(app):
+    """Remove webhook on shutdown."""
+    await bot.delete_webhook()
+
 def main() -> None:
     """Start the bot."""
+    global bot, application
+    
     # Create the Application and pass it your bot's token
     application = Application.builder().token(TOKEN).build()
+    bot = application.bot
 
     # Add conversation handler
     conv_handler = ConversationHandler(
@@ -381,8 +404,16 @@ def main() -> None:
     application.add_handler(conv_handler)
     application.add_handler(CommandHandler("help", show_help))
 
-    # Start the Bot
-    application.run_polling(allowed_updates=Update.ALL_TYPES)
+    # Create web application
+    app = web.Application()
+    app.router.add_post("/", webhook_handler)
+    
+    # Add startup and shutdown handlers
+    app.on_startup.append(on_startup)
+    app.on_shutdown.append(on_shutdown)
+    
+    # Start the web server
+    web.run_app(app, port=PORT)
 
 if __name__ == '__main__':
     main() 
