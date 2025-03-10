@@ -3,7 +3,7 @@ import sys
 import asyncio
 import logging
 import traceback
-from bot import app, setup_handlers, setup_webhook, manual_set_webhook, get_webhook_info
+from bot import app, setup_handlers, setup_webhook, manual_set_webhook, get_webhook_info, delete_webhook
 
 # Configure logging
 logging.basicConfig(
@@ -22,6 +22,11 @@ try:
     # Set up handlers
     logger.info("Setting up handlers...")
     setup_handlers()
+    
+    # Delete webhook and drop pending updates
+    logger.info("Deleting webhook and dropping pending updates...")
+    delete_result = delete_webhook()
+    logger.info(f"Delete webhook result: {delete_result}")
     
     # Try both webhook setup methods
     logger.info("Setting up webhook using async method...")

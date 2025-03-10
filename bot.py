@@ -81,7 +81,7 @@ chat_stats = ChatStats()
 # Create Flask app
 app = Flask(__name__)
 
-# Create Telegram application
+# Create Telegram application with specific allowed updates
 application = Application.builder().token(TOKEN).build()
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -104,6 +104,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
             reply_markup=InlineKeyboardMarkup(MAIN_KEYBOARD),
             parse_mode=ParseMode.MARKDOWN
         )
+        
+        # Store message ID for later reference
+        if not hasattr(context, 'user_data'):
+            context.user_data = {}
+        context.user_data[f"last_message_{user_id}"] = welcome_message.message_id
         
         # Pin the welcome message
         try:
@@ -209,10 +214,18 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     logger.info(f"Message received from user {user_id}")
     
     if user_id not in active_chats:
-        await update.message.reply_text(
-            "Вы не находитесь в активном чате. Используйте /start для начала.",
-            reply_markup=InlineKeyboardMarkup(MAIN_KEYBOARD)
-        )
+        try:
+            message = await update.message.reply_text(
+                "Вы не находитесь в активном чате. Используйте /start для начала.",
+                reply_markup=InlineKeyboardMarkup(MAIN_KEYBOARD)
+            )
+            
+            # Store message ID for later reference
+            if not hasattr(context, 'user_data'):
+                context.user_data = {}
+            context.user_data[f"last_message_{user_id}"] = message.message_id
+        except Exception as e:
+            logger.error(f"Error sending message to user {user_id}: {e}")
         return START
     
     partner_id = active_chats[user_id]
@@ -395,6 +408,18 @@ def get_webhook_info():
         logger.error(f"Error getting webhook info: {e}")
         return {"ok": False, "error": str(e)}
 
+def delete_webhook():
+    """Delete webhook using requests."""
+    delete_webhook_url = f"{TELEGRAM_API}/deleteWebhook?drop_pending_updates=true"
+    
+    try:
+        response = requests.get(delete_webhook_url)
+        logger.info(f"Delete webhook response: {response.text}")
+        return response.json()
+    except Exception as e:
+        logger.error(f"Error deleting webhook: {e}")
+        return {"ok": False, "error": str(e)}
+
 @app.route('/', methods=['GET'])
 def index():
     """Handle healthcheck requests."""
@@ -420,8 +445,19 @@ def status():
 def setup_webhook_route():
     """Setup webhook manually."""
     logger.info("Manual webhook setup request received")
+    
+    # First delete webhook and drop pending updates
+    delete_result = delete_webhook()
+    logger.info(f"Delete webhook result: {delete_result}")
+    
+    # Then set up new webhook
     result = manual_set_webhook()
-    return jsonify(result)
+    logger.info(f"Manual webhook setup result: {result}")
+    
+    return jsonify({
+        "delete_result": delete_result,
+        "setup_result": result
+    })
 
 @app.route('/telegram', methods=['POST'])
 def telegram_webhook():
@@ -442,6 +478,10 @@ def telegram_webhook():
 if __name__ == '__main__':
     # Set up handlers
     setup_handlers()
+    
+    # Delete webhook and drop pending updates
+    delete_result = delete_webhook()
+    logger.info(f"Delete webhook result: {delete_result}")
     
     # Set up webhook
     asyncio.run(setup_webhook())
