@@ -3,9 +3,12 @@ builder = "nixpacks"
 buildCommand = "pip install -r requirements.txt"
 
 [deploy]
-startCommand = "gunicorn --bind 0.0.0.0:$PORT wsgi:application"
+startCommand = "gunicorn --bind 0.0.0.0:$PORT --workers 1 --timeout 120 --log-level debug wsgi:application"
 healthcheckPath = "/"
 healthcheckTimeout = 30
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
-healthcheckInterval = 10 
+healthcheckInterval = 10
+
+[env]
+WEBHOOK_URL = "https://dox-bot-production.up.railway.app" 
