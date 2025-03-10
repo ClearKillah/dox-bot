@@ -18,20 +18,6 @@ from telegram.ext import (
     ContextTypes,
 )
 
-# Import modules
-from database import db
-from groups import (
-    create_group, join_group, leave_group,
-    update_group_message, handle_group_message
-)
-from profile import (
-    show_profile, edit_gender, set_gender,
-    edit_age, set_age, edit_interests,
-    toggle_interest, edit_avatar, set_avatar,
-    show_stats
-)
-from help import show_help, show_help_menu, show_help_section
-
 # Configure logging
 logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
